@@ -12,184 +12,169 @@
  */
 package frk.gpssimulator;
 
-import java.io.File;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.xml.bind.JAXBException;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.MessageChannel;
 
 import frk.gpssimulator.model.Leg;
 import frk.gpssimulator.model.Point;
 import frk.gpssimulator.model.PositionInfo;
+import frk.gpssimulator.service.GpsdService;
+import frk.gpssimulator.service.KmlService;
+import frk.gpssimulator.support.NavUtils;
 
 /**
  * Simulates a vehicle moving along a path defined in a kml file.
+ *
  * @author faram
+ * @author Gunnar Hillert
  */
 public class GpsSimulator implements Runnable {
-	//-- set by caller
 
-	private KmlUtil kmlUtil = new KmlUtil();
-	private Dispatcher dispatcher;
-	private Double speed;   // metres/sec
+	private long id;
+
+	private MessageChannel messageChannel;
+
+	private KmlService kmlService;
+	private GpsdService gpsdService;
+
+	private boolean useGpsd = false;
+
+	private AtomicBoolean cancel = new AtomicBoolean();
+
+	private Double speedInMps; // In meters/sec
 	private Boolean shouldMove;
-	//-- set by caller
-	Integer reportInterval = 100;   //millisecs at which to send position reports
-	PositionInfo currentPosition = null;
-	List<Leg> legs;
-	Integer legIndex = 0;
-	Double legHeading;
+	private boolean exportPositionsToKml = false;
 
+	private Integer reportInterval = 500; // millisecs at which to send position reports
+	private PositionInfo currentPosition = null;
+	private List<Leg> legs;
+
+	@Override
 	public void run() {
 		try {
+
+			if (cancel.get()) {
+				destroy();
+				return;
+			}
 			while (!Thread.interrupted()) {
 				long startTime = new Date().getTime();
 				if (currentPosition != null) {
-					if(shouldMove) {
+					if (shouldMove) {
 						moveVehicle();
-						currentPosition.setSpeed(speed);
+						currentPosition.setSpeed(speedInMps);
 					} else {
 						currentPosition.setSpeed(0.0);
 					}
+
+					if (this.exportPositionsToKml) {
+						kmlService.updatePosition(id, currentPosition);
+					}
+
+					if (useGpsd) {
+						this.gpsdService.updatePosition(currentPosition);
+					}
+
+					messageChannel.send(MessageBuilder.withPayload(currentPosition).build());
 				}
 
-				dispatcher.send(currentPosition);
-				//wait till next position report is due
+				// wait till next position report is due
 				sleep(startTime);
-			}//loop endlessly
-		} catch(InterruptedException ie) {
+			} // loop endlessly
+		} catch (InterruptedException ie) {
 			destroy();
 			return;
-		} catch (Exception e) {
-			e.printStackTrace();
 		}
 
 		destroy();
-	}//run----------------
-
+	}
 
 	/**
-	 * On thread interrupt.
-	 * Send null position to all consumers to indicate that sim has closed.
+	 * On thread interrupt. Send null position to all consumers to indicate that
+	 * sim has closed.
 	 */
 	void destroy() {
 		currentPosition = null;
-		dispatcher.send(currentPosition);
 	}
 
 	/**
 	 * Sleep till next position report is due.
+	 *
 	 * @param startTime
 	 * @throws InterruptedException
 	 */
 	private void sleep(long startTime) throws InterruptedException {
 		long endTime = new Date().getTime();
 		long elapsedTime = endTime - startTime;
-		long sleepTime = (reportInterval - elapsedTime) > 0 ? (reportInterval - elapsedTime) : 0;
+		long sleepTime = reportInterval - elapsedTime > 0 ? reportInterval - elapsedTime : 0;
 		Thread.sleep(sleepTime);
 	}
-
-	/**
-	 * Loads path from path kml file and positions vehicle at start of path.
-	 * @param pathFile
-	 */
-	public void loadPathKml(File pathFile) throws JAXBException, NumberFormatException {
-		currentPosition = null;
-		List<Point>points = kmlUtil.getCoordinates(pathFile);
-		createLegsList(points);
-		setStartPosition();
-	}//loadPathKml--------------
-
-
-/**
-	* Creates list of legs in the path
-	* @param points
-	*/
-	void createLegsList(List<Point> points) {
-		legs = new ArrayList<Leg>();
-		for(int i=0; i<(points.size()-1); i++) {
-			Leg leg = new Leg();
-			leg.setId(i);
-			leg.setStartPosition(points.get(i));
-			leg.setEndPosition(points.get(i+1));
-			Double length = NavUtil.getDistance(points.get(i), points.get(i+1));
-			leg.setLength(length);
-			Double heading = NavUtil.getBearing(points.get(i), points.get(i+1));
-			leg.setHeading(heading);
-			legs.add(leg);
-		}
-
-
-	}//createLegsList--------------
 
 	/**
 	 * Set new position of vehicle based on current position and vehicle speed.
 	 */
 	void moveVehicle() {
-		Double distance = speed *  reportInterval/1000.0;
+		Double distance = speedInMps * reportInterval / 1000.0;
 		Double distanceFromStart = currentPosition.getDistanceFromStart() + distance;
-		Double excess = 0.0;    // amount by which next postion will exceed end point of present leg
+		Double excess = 0.0; // amount by which next postion will exceed end
+								// point of present leg
 
-		for(int i = currentPosition.getLeg().getId(); i < legs.size(); i++) {
+		for (int i = currentPosition.getLeg().getId(); i < legs.size(); i++) {
 			Leg currentLeg = legs.get(i);
-			excess = (distanceFromStart > currentLeg.getLength()) ? (distanceFromStart - currentLeg.getLength()) : 0.0;
-			//System.out.println("leg: "+currentLeg.getId()+" legLength: "+currentLeg.getLength()+" excess: "+excess+ " distanceFromStart: "+distanceFromStart);
-			if(excess == 0.0) {
-				//this means new position falls within current leg
+			excess = distanceFromStart > currentLeg.getLength() ? distanceFromStart - currentLeg.getLength() : 0.0;
+
+			if (Double.doubleToRawLongBits(excess) == 0) {
+				// this means new position falls within current leg
 				currentPosition.setDistanceFromStart(distanceFromStart);
 				currentPosition.setLeg(currentLeg);
-				Point newPosition = NavUtil.getPosition(currentLeg.getStartPosition(), distanceFromStart, currentLeg.getHeading());
+				Point newPosition = NavUtils.getPosition(currentLeg.getStartPosition(), distanceFromStart,
+						currentLeg.getHeading());
 				currentPosition.setPosition(newPosition);
 				return;
 			}
 			distanceFromStart = excess;
 		}
 
-		//if we've reached here it means vehicle has moved beyond end of path so go back to start of path
+		// if we've reached here it means vehicle has moved beyond end of path
+		// so go back to start of path
 		setStartPosition();
-
-
-	}//setPosition--------------------------
+	}
 
 	/**
 	 * Position vehicle at start of path.
 	 */
-	void setStartPosition() {
+	public void setStartPosition() {
 		currentPosition = new PositionInfo();
 		Leg leg = legs.get(0);
 		currentPosition.setLeg(leg);
 		currentPosition.setPosition(leg.getStartPosition());
 		currentPosition.setDistanceFromStart(0.0);
-	}//setStartPosition------------------
-
-	/**
-	 * @return the dispatcher
-	 */
-	public Dispatcher getDispatcher() {
-		return dispatcher;
-	}
-
-	/**
-	 * @param dispatcher the dispatcher to set
-	 */
-	public void setDispatcher(Dispatcher dispatcher) {
-		this.dispatcher = dispatcher;
 	}
 
 	/**
 	 * @return the speed
 	 */
-	public Double getSpeed() {
-		return speed;
+	public Double getSpeedInMps() {
+		return speedInMps;
 	}
 
 	/**
 	 * @param speed the speed to set
 	 */
-	public void setSpeed(Double speed) {
-		this.speed = speed;
-		//System.out.println("speed is "+speed);
+	public void setSpeedInMps(Double speed) {
+		this.speedInMps = speed;
+	}
+
+	public void setSpeedInKph(Double speed) {
+		this.speedInMps = speed / 3.6;
+	}
+
+	public Double getSpeedInKph() {
+		return this.speedInMps * 3.6;
 	}
 
 	/**
@@ -205,4 +190,45 @@ public class GpsSimulator implements Runnable {
 	public void setShouldMove(Boolean shouldMove) {
 		this.shouldMove = shouldMove;
 	}
+
+	public void setMessageChannel(MessageChannel sendPosition) {
+		this.messageChannel = sendPosition;
+	}
+
+	public synchronized void cancel() {
+		this.cancel.set(true);
+	}
+
+	public void setExportPositionsToKml(boolean exportPositionsToKml) {
+		this.exportPositionsToKml = exportPositionsToKml;
+	}
+
+	public void setKmlService(KmlService kmlService) {
+		this.kmlService = kmlService;
+	}
+
+	public void setGpsdService(GpsdService gpsdService) {
+		this.gpsdService = gpsdService;
+	}
+
+	public void setLegs(List<Leg> legs) {
+		this.legs = legs;
+	}
+
+	public PositionInfo getCurrentPosition() {
+		return currentPosition;
+	}
+
+	public void setCurrentPosition(PositionInfo currentPosition) {
+		this.currentPosition = currentPosition;
+	}
+
+	public long getId() {
+		return id;
+	}
+
+	public void setId(long id) {
+		this.id = id;
+	}
+
 }

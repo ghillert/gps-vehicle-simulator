@@ -28,6 +28,13 @@ public class Point {
 		this.altitude = altitude;
 	}
 
+	public Point(Double latitude, Double longitude) {
+		super();
+		this.latitude = latitude;
+		this.longitude = longitude;
+		this.altitude = null;
+	}
+
 	/**
 	 * @return the latitude
 	 */
@@ -69,4 +76,11 @@ public class Point {
 	public void setAltitude(Double altitude) {
 		this.altitude = altitude;
 	}
+
+	@Override
+	public String toString() {
+		return "Point [lat/lang:" + latitude + "," + longitude + ", altitude=" + altitude + "]";
+	}
+
+
 }

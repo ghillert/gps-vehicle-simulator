@@ -1,0 +1,8 @@
+debug: false
+server:
+  session-timeout: 20
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+gpsSimmulator:
+  googleApiKey:

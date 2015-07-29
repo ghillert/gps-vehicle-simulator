@@ -25,7 +25,6 @@ public class PositionInfo {
 	private Double distanceFromStart;
 	private Double speed;       // m/s
 
-
 	/**
 	 * @return the position
 	 */
@@ -81,4 +80,12 @@ public class PositionInfo {
 	public void setSpeed(Double speed) {
 		this.speed = speed;
 	}
+
+	@Override
+	public String toString() {
+		return "PositionInfo [position=" + position + ", leg=" + leg + ", distanceFromStart=" + distanceFromStart
+				+ ", speed=" + speed + "]";
+	}
+
+
 }
