@@ -1,4 +1,4 @@
-gps-vehicle-simulator
+GPS Vehicle Simulator
 =====================
 
 * KML Integration
@@ -51,7 +51,9 @@ Open the `gps.kml` file in Google Earth. You should see 3 place-marks in the Was
 
 ## REST Api
 
-* http://localhost:8080/api/dc (Loads directions from JSON file and Google Directions API))
-* http://localhost:8080/api/status
-* http://localhost:8080/api/cancel (Cancels all vehicles)
-* http://localhost:8080/api/start (Loads directions from KML file)
+* GET http://localhost:8080/api/dc (Loads directions from JSON file and Google Directions API))
+* GET http://localhost:8080/api/status
+* GET http://localhost:8080/api/cancel (Cancels all vehicles)
+* GET http://localhost:8080/api/start (Loads directions from KML file)
+* GET http://localhost:8080/api/directions
+

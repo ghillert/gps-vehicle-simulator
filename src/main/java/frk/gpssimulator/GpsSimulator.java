@@ -75,7 +75,7 @@ public class GpsSimulator implements Runnable {
 						kmlService.updatePosition(id, currentPosition);
 					}
 
-					if (useGpsd) {
+					if (this.useGpsd) {
 						this.gpsdService.updatePosition(currentPosition);
 					}
 
