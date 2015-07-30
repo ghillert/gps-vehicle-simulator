@@ -57,3 +57,11 @@ Open the `gps.kml` file in Google Earth. You should see 3 place-marks in the Was
 * GET http://localhost:8080/api/start (Loads directions from KML file)
 * GET http://localhost:8080/api/directions
 
+## TODOs
+- [ ] change package names
+- [ ] store map data in a local resource so no connectivity is needed when executing
+- [ ] remove gps daemon integration
+- [ ] Add directions for getting a google api directions key
+- [ ] Add more routes, bring the total to 30 going across DC neighborhood
+- [ ] Add vechicle ID to the generated data per route
+- [ ] Add some health status to the generate data per route - randomly fail some percentage of the truck's heath status.
