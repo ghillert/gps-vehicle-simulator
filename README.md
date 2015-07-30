@@ -60,6 +60,7 @@ Open the `gps.kml` file in Google Earth. You should see 3 place-marks in the Was
 ## TODOs
 - [ ] change package names
 - [ ] move into springone2015 repository
+- [ ] change ERROR level logging to INFO
 - [ ] store map data in a local resource so no connectivity is needed when executing
 - [ ] remove gps daemon integration
 - [ ] Add directions for getting a google api directions key
